@@ -10,18 +10,14 @@
 
 int main( int argc, char* argv[] )
 {
-  if( argc != 4 )
+  if( argc < 2 )
     {
     std::cerr << "Usage: "<< std::endl;
     std::cerr << argv[0];
-    std::cerr << " <InputImageName> <InputMeshName> <OutputImageName>";
+	std::cerr << " <InputMeshName> [<InputMeshName> <InputMeshName> ... ]";
     std::cerr << std::endl;
     return EXIT_FAILURE;
     }
-
-  const char * inputImageName   = argv[1];
-  const char * inputMeshName    = argv[2];
-  const char * outputImageName  = argv[3];
 
   const unsigned int Dimension = 3;
   typedef double MeshPixelType;
@@ -29,51 +25,82 @@ int main( int argc, char* argv[] )
   typedef itk::Mesh< MeshPixelType, Dimension > MeshType;
 
   typedef itk::MeshFileReader< MeshType >  MeshReaderType;
-  MeshReaderType::Pointer meshReader = MeshReaderType::New();
-  meshReader->SetFileName( inputMeshName );
-
+  
+  
   typedef unsigned char                           InputPixelType;
   typedef itk::Image< InputPixelType, Dimension > InputImageType;
   typedef itk::ImageFileReader< InputImageType >  ImageReaderType;
 
-  ImageReaderType::Pointer imageReader = ImageReaderType::New();
-  imageReader->SetFileName( inputImageName );
+  //ImageReaderType::Pointer imageReader = ImageReaderType::New();
+  //imageReader->SetFileName( inputImageName );
 
   typedef unsigned char                             OutputPixelType;
   typedef itk::Image< OutputPixelType, Dimension >  OutputImageType;
-
-  typedef itk::CastImageFilter< InputImageType, OutputImageType > CastFilterType;
-  CastFilterType::Pointer cast = CastFilterType::New();
-  cast->SetInput( imageReader->GetOutput() );
-
+    
   typedef itk::TriangleMeshToBinaryImageFilter< MeshType, OutputImageType > FilterType;
-  FilterType::Pointer filter = FilterType::New();
-  filter->SetInput( meshReader->GetOutput() );
-  filter->SetInfoImage( cast->GetOutput() );
-  filter->SetInsideValue( itk::NumericTraits< OutputPixelType >::max() );
-  try
-    {
-    filter->Update();
-    }
-  catch( itk::ExceptionObject & error )
-    {
-    std::cerr << "Error: " << error << std::endl;
-    return EXIT_FAILURE;
-    }
+ 
+  
+  for (int i = 1; i < argc; ++i)
+  {	  
+	  const char * inputMeshName = argv[i];
+	  std::string outputImageName = argv[i];
+	  outputImageName += ".mha";
 
-  typedef itk::ImageFileWriter< OutputImageType > WriterType;
-  WriterType::Pointer writer = WriterType::New();
-  writer->SetFileName( outputImageName );
-  writer->SetInput( filter->GetOutput() );
-  try
-    {
-    writer->Update();
-    }
-  catch( itk::ExceptionObject & error )
-    {
-    std::cerr << "Error: " << error << std::endl;
-    return EXIT_FAILURE;
-    }
+	  MeshReaderType::Pointer meshReader = MeshReaderType::New();
+	  meshReader->SetFileName(inputMeshName);
+
+	  FilterType::Pointer filter = FilterType::New();
+
+	  InputImageType::SizeType size;
+	  size[0] = 500;
+	  size[1] = 500;
+	  size[2] = 500;
+	  filter->SetSize(size);
+
+	  InputImageType::SpacingType spacing;
+	  spacing[0] = .2;
+	  spacing[1] = .2;
+	  spacing[2] = .2;
+	  filter->SetSpacing(spacing);
+
+	  InputImageType::PointType origin;
+	  origin[0] = -46;
+	  origin[1] = -17;
+	  origin[2] = -2;
+	  filter->SetOrigin(origin);
+	  filter->SetInput(meshReader->GetOutput());
+	  filter->SetInsideValue(itk::NumericTraits< OutputPixelType >::max());
+
+	  std::cout << "Rasterizing file: " << inputMeshName << "...";
+	  try
+	  {
+		  filter->Update();
+	  }
+	  catch (itk::ExceptionObject & error)
+	  {
+		  std::cerr << "Error: " << error << std::endl;
+		  return EXIT_FAILURE;
+	  }
+
+	  std::cout << "Done" << std::endl;
+
+	  std::cout << "Writing...";
+	  typedef itk::ImageFileWriter< OutputImageType > WriterType;
+	  WriterType::Pointer writer = WriterType::New();
+	  writer->SetFileName(outputImageName.c_str());
+	  writer->SetInput(filter->GetOutput());
+	  try
+	  {
+		  writer->Update();
+	  }
+	  catch (itk::ExceptionObject & error)
+	  {
+		  std::cerr << "Error: " << error << std::endl;
+		  return EXIT_FAILURE;
+	  }
+	  std::cout << "Done" << std::endl;
+	  
+  }
 
   return EXIT_SUCCESS;
 }
